@@ -2,15 +2,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import datetime # For date operations
+import datetime  # For date operations
+import plotly.express as px # For Pie Chart
 
 # --- Helper Function for Financial Data Generation ---
 def generate_financial_data(start_date, end_date):
     """Generates sample financial data for the given date range."""
     num_days = (end_date - start_date).days + 1
     if num_days <= 0:
-        # Handle case where end_date might be before start_date from input,
-        # or if only one day is selected (num_days would be 1 after +1)
         dates = pd.to_datetime([start_date]) # Use start_date if range is invalid
         num_days = 1
     else:
@@ -18,17 +17,15 @@ def generate_financial_data(start_date, end_date):
 
     # Cash on Hand
     initial_cash = 250000
-    # Ensure cash_fluctuations has same length as dates
     cash_fluctuations = np.random.randint(-10000, 10000, size=len(dates))
     cash_on_hand_trend = initial_cash + np.cumsum(cash_fluctuations)
-    cash_data = pd.DataFrame({'Date': dates, 'Cash on Hand': cash_on_hand_trend}).set_index('Date')
+    cash_data = pd.DataFrame({'Date': dates, 'Cash on Hand ($)': cash_on_hand_trend}).set_index('Date')
 
     # Fixed Deposits (simplified: total value of FDs)
     initial_fd_value = 1000000
-    # Ensure fd_growth_rate has same length as dates
     fd_growth_rate_daily = np.random.uniform(0.00005, 0.00015, size=len(dates)) # Small daily interest
     fd_value_trend = initial_fd_value * np.cumprod(1 + fd_growth_rate_daily)
-    fd_data = pd.DataFrame({'Date': dates, 'Fixed Deposit Value': fd_value_trend}).set_index('Date')
+    fd_data = pd.DataFrame({'Date': dates, 'Fixed Deposit Value ($)': fd_value_trend}).set_index('Date')
 
     # Outstanding Payments (snapshot for the end_date)
     outstanding_categories = ["Tuition Fees", "Activity Fees", "Transport Fees", "Other Dues"]
@@ -38,7 +35,15 @@ def generate_financial_data(start_date, end_date):
         'Amount Outstanding ($)': outstanding_amounts
     })
 
-    return cash_data, fd_data, outstanding_df
+    # Expenditure Breakdown (snapshot for the current period view)
+    exp_categories = ["Salaries", "Utilities", "Supplies", "Maintenance", "Academics", "Admin"]
+    exp_amounts = np.random.randint(20000, 150000, size=len(exp_categories))
+    expenditure_breakdown_df = pd.DataFrame({
+        'Category': exp_categories,
+        'Amount ($)': exp_amounts
+    })
+
+    return cash_data, fd_data, outstanding_df, expenditure_breakdown_df
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -46,8 +51,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. Main Heading with Custom Color ---
-st.markdown("<h1 style='text-align: center; color: darkgreen;'>School Dashboard</h1>", unsafe_allow_html=True)
+# Attempt to reduce top padding of the main content area
+st.markdown("""
+    <style>
+        div.block-container {
+            padding-top: 1.5rem !important; /* Adjust this value as needed */
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. Main Heading with Custom Color and reduced margin ---
+st.markdown("<h1 style='text-align: center; color: darkgreen; margin-bottom: 0.5rem;'>School Dashboard</h1>", unsafe_allow_html=True)
 st.markdown("---") # Adds a horizontal rule
 
 # --- 3. Sidebar Navigation Menu ---
@@ -65,8 +79,6 @@ selected_main_option = st.sidebar.selectbox(
 if selected_main_option == "School":
     st.header("🏫 School Information")
 
-    # School Sub-Menu (conditionally shown in the sidebar with selectbox)
-    # Removed st.sidebar.markdown("---") from here
     st.sidebar.subheader("School Details")
     school_sub_options = ("Financial", "Facilities", "Academic Programs")
     school_sub_option = st.sidebar.selectbox(
@@ -74,52 +86,82 @@ if selected_main_option == "School":
         school_sub_options,
         key="school_submenu_selectbox"
     )
-    st.sidebar.markdown("---") # Separator after the sub-menu
+    st.sidebar.markdown("---")
 
-    # Display content based on School sub-menu selection
     if school_sub_option == "Financial":
         st.subheader("💰 Financial Overview")
-        st.write("This section displays financial data, budgets, and expenditure.")
+        # Removed st.write("This section displays...") for compactness
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(label="Annual Budget", value="$5,000,000", delta="$200,000 from last year")
-        with col2:
-            st.metric(label="Current Expenditure", value="$2,350,000", delta="47% of budget")
-
-        st.markdown("---")
-        st.markdown("#### Financial Trends & Snapshots")
-
-        # Date Range Selector
-        # Use st.columns for better layout of label and date input if desired
+        # Date Range Selector - Placed prominently at the top of this section
         today = datetime.date.today()
-        default_start_date = today - datetime.timedelta(days=29) # Last 30 days
-        
-        selected_date_range = st.date_input(
-            "Select Date Range for Trends:",
-            value=(default_start_date, today),
-            min_value=datetime.date(2020, 1, 1),
-            max_value=today + datetime.timedelta(days=365), # Allow future projection up to a year
-            key="financial_date_range_selector"
-        )
+        default_start_date = today - datetime.timedelta(days=29) # Default to last 30 days
+
+        date_label_col, date_input_col = st.columns([0.3, 0.7]) # Adjust ratio as needed
+        with date_label_col:
+            st.markdown("<p style='font-weight:bold; margin-top:7px; margin-bottom:0px;'>Date Range for Trends:</p>", unsafe_allow_html=True)
+        with date_input_col:
+            selected_date_range = st.date_input(
+                "Select Date Range for Trends:", # Actual label hidden
+                value=(default_start_date, today),
+                min_value=datetime.date(2020, 1, 1),
+                max_value=today + datetime.timedelta(days=365),
+                key="financial_date_range_selector",
+                label_visibility="collapsed" # Hides the default Streamlit label
+            )
+        # st.markdown("---") # Separator after date input, can be removed if too much space
+
+        # Metrics
+        m_col1, m_col2 = st.columns(2)
+        with m_col1:
+            st.metric(label="Annual Budget", value="$5,000,000", delta="$200,000 vs LY", delta_color="normal")
+        with m_col2:
+            st.metric(label="YTD Expenditure", value="$2,350,000", delta="47% of Budget", delta_color="off") # "off" for neutral display
+
+        st.markdown("---") # Separator after metrics
 
         if len(selected_date_range) == 2:
             start_date, end_date = selected_date_range
             if start_date <= end_date:
-                cash_data, fd_data, outstanding_df = generate_financial_data(start_date, end_date)
+                cash_data, fd_data, outstanding_df, expenditure_df = generate_financial_data(start_date, end_date)
 
-                st.markdown("##### 💹 Cash on Hand Trend")
-                st.line_chart(cash_data['Cash on Hand'])
+                # Charts in two columns
+                chart_col1, chart_col2 = st.columns(2)
 
-                st.markdown("##### 📈 Fixed Deposits Value Trend")
-                st.line_chart(fd_data['Fixed Deposit Value'])
+                with chart_col1:
+                    st.markdown("###### Cash on Hand Trend")
+                    st.line_chart(cash_data['Cash on Hand ($)'], height=220)
 
-                st.markdown(f"##### 📊 Current Outstanding Payments (as of {end_date.strftime('%Y-%m-%d')})")
-                st.bar_chart(outstanding_df.set_index('Category'))
+                    st.markdown("###### Fixed Deposits Value Trend")
+                    st.line_chart(fd_data['Fixed Deposit Value ($)'], height=220)
+
+                with chart_col2:
+                    st.markdown("###### Expenditure Breakdown") # External title for consistency
+                    if not expenditure_df.empty:
+                        fig_pie = px.pie(expenditure_df,
+                                         values='Amount ($)',
+                                         names='Category',
+                                         hole=0.4, # Creates a donut chart
+                                         # title="Expenditure Breakdown" # Title can be here or above
+                                         )
+                        fig_pie.update_traces(textposition='inside', textinfo='percent+label', pull=[0.05]*len(expenditure_df.index))
+                        fig_pie.update_layout(
+                            margin=dict(l=10, r=10, t=30, b=10), # Adjusted margins
+                            height=235, # Slightly more height for pie
+                            showlegend=False, # Legend hidden as info is on slices
+                            # title_x=0.5, title_font_size=14 # If using Plotly title
+                        )
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    else:
+                        st.info("No expenditure data to display.")
+
+                    st.markdown("###### Current Outstanding Payments")
+                    if not outstanding_df.empty:
+                        st.bar_chart(outstanding_df.set_index('Category')['Amount Outstanding ($)'], height=220)
+                    else:
+                        st.info("No outstanding payments data.")
             else:
                 st.warning("Start date must be before or the same as the end date.")
         else:
-            # This case should ideally not happen with st.date_input range if value is a tuple
             st.info("Select a valid date range (start and end date) to view financial trends.")
 
 
@@ -143,9 +185,6 @@ if selected_main_option == "School":
 # --- TEACHERS SECTION ---
 elif selected_main_option == "Teachers":
     st.header("👩‍🏫 Teacher Management")
-
-    # Teachers Sub-Menu
-    # Removed st.sidebar.markdown("---") from here
     st.sidebar.subheader("Teacher Details")
     teacher_sub_options = ("Teacher Profiles", "Analysis", "KPIs", "Performance Logs")
     teacher_sub_option = st.sidebar.selectbox(
@@ -203,9 +242,6 @@ elif selected_main_option == "Teachers":
 # --- STUDENTS SECTION ---
 elif selected_main_option == "Students":
     st.header("🧑‍🎓 Student Insights")
-
-    # Students Sub-Menu
-    # Removed st.sidebar.markdown("---") from here
     st.sidebar.subheader("Student Options")
     student_sub_options = ("Performance Tracking", "Student Search", "Demographics", "Attendance")
     student_sub_option = st.sidebar.selectbox(
@@ -258,9 +294,6 @@ elif selected_main_option == "Students":
 # --- OTHERS SECTION ---
 elif selected_main_option == "Others":
     st.header("⚙️ Other Utilities")
-
-    # Others Sub-Menu
-    # Removed st.sidebar.markdown("---") from here
     st.sidebar.subheader("Utilities Menu")
     other_sub_options = ("Settings & Reports", "Event Calendar", "Resource Links")
     other_sub_option = st.sidebar.selectbox(
@@ -302,4 +335,4 @@ elif selected_main_option == "Others":
 
 # --- Footer (Optional) ---
 st.markdown("---")
-st.caption("School Dashboard v0.5 | Developed with Streamlit")
+st.caption("School Dashboard v0.6 | Developed with Streamlit")
