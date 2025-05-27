@@ -76,16 +76,26 @@ if selected_main_option == "School":
         #    ...
 
         # Adjust these defaults to match your actual data's date range for testing
-        first_data_date = datetime.date(2023, 9, 1) # Example: earliest date in your CSV
-        last_data_date = datetime.date(2023, 12, 31)  # Example: latest date in your CSV or a bit after
+        # Your data is for May 2024
+        data_start_date = datetime.date(2024, 5, 21)
+        data_end_date = datetime.date(2024, 5, 27) # Or a bit later if you might add more data
+
+        # Sensible default selection for the date picker
+        default_picker_start = data_start_date
+        default_picker_end = data_end_date # or min(data_end_date, datetime.date.today()) if you want it to not go past today by default
+
+        # Min and Max for the calendar itself
+        calendar_min_date = datetime.date(2024, 1, 1) # Allow selection from start of 2024
+        calendar_max_date = datetime.date(2025, 12, 31) # Allow selection well into the future
 
         selected_date_range = st.date_input(
             "Select Date Range for Trends:",
-            value=(first_data_date, last_data_date), # Default to cover your data
-            min_value=first_data_date - datetime.timedelta(days=30), # Allow selecting a bit before
-            max_value=last_data_date + datetime.timedelta(days=30),   # Allow selecting a bit after
+            value=(default_picker_start, default_picker_end), # Default to cover your May 2024 data
+            min_value=calendar_min_date,    # Earliest date selectable in calendar
+            max_value=calendar_max_date,    # Latest date selectable in calendar
             key="financial_date_range_selector"
         )
+
         st.markdown("---")
 
         if len(selected_date_range) == 2:
