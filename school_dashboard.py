@@ -1,7 +1,7 @@
 # dashboard_intermediate_test.py
 import streamlit as st
 import pandas as pd
-import numpy as np
+import numpy as np # Though not directly used in this simplified version, good to keep if expanding
 import datetime
 import plotly.express as px
 import os
@@ -48,7 +48,7 @@ selected_main_option = st.sidebar.selectbox(
 # --- Main Content ---
 if selected_main_option == "School":
     st.header("🏫 School Information")
-    st.sidebar.subheader("School Details") # Moved subheader here for direct association
+    st.sidebar.subheader("School Details")
     school_sub_option = st.sidebar.selectbox(
         "Select Category:",
         ("Financial", "Facilities"), # Simplified sub-menu
@@ -60,31 +60,32 @@ if selected_main_option == "School":
     if school_sub_option == "Financial":
         st.subheader("💰 Financial Overview")
 
-        # --- Sample CSV Files (Create these in the same directory as the script) ---
+        # --- CSV Files Information ---
+        # Expected CSVs in the same directory as this script:
         # 1. cash_on_hand_trend.csv
-        # Date,Cash_on_Hand_USD
-        # 2023-10-01,245000
-        # 2023-10-02,248000
-        # 2023-10-15,265000
-
+        #    Example:
+        #    Date,Cash_on_Hand_USD
+        #    2023-09-01,230000
+        #    2023-10-01,245000
+        #    ...
         # 2. expenditure_breakdown.csv
-        # Category,Amount_USD
-        # Salaries,125000
-        # Utilities,28000
-        # Supplies,45000
+        #    Example:
+        #    Category,Amount_USD
+        #    Salaries,125000
+        #    Utilities,28000
+        #    ...
 
-        today = datetime.date.today()
-        default_start_date = today - datetime.timedelta(days=29)
+        # Adjust these defaults to match your actual data's date range for testing
+        first_data_date = datetime.date(2023, 9, 1) # Example: earliest date in your CSV
+        last_data_date = datetime.date(2023, 12, 31)  # Example: latest date in your CSV or a bit after
 
-        # Date Range Selector (Simplified layout for now)
         selected_date_range = st.date_input(
             "Select Date Range for Trends:",
-            value=(default_start_date, today),
-            min_value=datetime.date(2023, 1, 1), # Adjust if your data is older
-            max_value=today + datetime.timedelta(days=365),
+            value=(first_data_date, last_data_date), # Default to cover your data
+            min_value=first_data_date - datetime.timedelta(days=30), # Allow selecting a bit before
+            max_value=last_data_date + datetime.timedelta(days=30),   # Allow selecting a bit after
             key="financial_date_range_selector"
         )
-
         st.markdown("---")
 
         if len(selected_date_range) == 2:
@@ -92,27 +93,75 @@ if selected_main_option == "School":
             start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
             end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
 
+            # --- DEBUG PRINTS FOR DATE RANGE ---
+            print(f"DEBUG: Selected Start Date (from picker): {start_date}, Filter Start Datetime: {start_datetime}")
+            print(f"DEBUG: Selected End Date (from picker): {end_date}, Filter End Datetime: {end_datetime}")
+            # --- END DEBUG ---
+
             if start_date <= end_date:
-                # Load data
                 cash_data_full = load_csv_data("cash_on_hand_trend.csv", date_col='Date', index_col='Date')
                 expenditure_df = load_csv_data("expenditure_breakdown.csv")
 
-                # Filter trend data
+                # --- DEBUG PRINTS FOR cash_data_full ---
+                if not cash_data_full.empty:
+                    print("\nDEBUG: cash_data_full (raw loaded data) head:")
+                    print(cash_data_full.head())
+                    print(f"DEBUG: cash_data_full index type: {type(cash_data_full.index)}")
+                    if not cash_data_full.index.empty:
+                         print(f"DEBUG: cash_data_full first index value: {cash_data_full.index[0]}, type: {type(cash_data_full.index[0])}")
+                         print(f"DEBUG: cash_data_full last index value: {cash_data_full.index[-1]}, type: {type(cash_data_full.index[-1])}")
+                    print(f"DEBUG: cash_data_full columns: {cash_data_full.columns.tolist()}")
+                    print(f"DEBUG: cash_data_full shape: {cash_data_full.shape}")
+                else:
+                    print("DEBUG: cash_data_full is EMPTY after loading (File not found or empty).")
+                # --- END DEBUG ---
+
                 cash_data_filtered = pd.DataFrame() # Initialize
                 if not cash_data_full.empty:
-                     cash_data_filtered = cash_data_full[(cash_data_full.index >= start_datetime) & (cash_data_full.index <= end_datetime)]
+                     # Ensure the index is indeed datetime before filtering
+                     if pd.api.types.is_datetime64_any_dtype(cash_data_full.index):
+                        cash_data_filtered = cash_data_full[
+                            (cash_data_full.index >= start_datetime) &
+                            (cash_data_full.index <= end_datetime)
+                        ]
+                     else:
+                        print("DEBUG: cash_data_full.index is NOT datetime. Filtering might fail or be incorrect.")
+
+
+                # --- DEBUG PRINTS FOR cash_data_filtered ---
+                if not cash_data_filtered.empty:
+                    print("\nDEBUG: cash_data_filtered (after date range filter) head:")
+                    print(cash_data_filtered.head())
+                    print(f"DEBUG: cash_data_filtered shape: {cash_data_filtered.shape}")
+
+                else:
+                    print("DEBUG: cash_data_filtered is EMPTY after filtering.")
+                    if not cash_data_full.empty and not pd.api.types.is_datetime64_any_dtype(cash_data_full.index):
+                        print("      Reason: cash_data_full index was not datetime type.")
+                    elif not cash_data_full.empty:
+                        print("      Reason: No data within the selected date range or other filtering issue.")
+
+                # --- END DEBUG ---
 
 
                 chart_col1, chart_col2 = st.columns(2)
 
                 with chart_col1:
                     st.markdown("###### Cash on Hand Trend (Streamlit Chart)")
+                    # Check if 'Cash_on_Hand_USD' column exists in the *filtered* data
                     if not cash_data_filtered.empty and 'Cash_on_Hand_USD' in cash_data_filtered.columns:
                         st.line_chart(cash_data_filtered['Cash_on_Hand_USD'], height=250)
                     elif cash_data_full.empty : # If file wasn't loaded at all
                         st.warning("Cash data file ('cash_on_hand_trend.csv') missing or empty.")
-                    else: # File loaded, but no data in range or column missing
+                    else: # File loaded, but filtered data is empty or column missing
                         st.info("No cash on hand data for selected range or 'Cash_on_Hand_USD' column missing.")
+                        # More specific debug info in UI (optional, can remove after fixing)
+                        if not cash_data_full.empty and 'Cash_on_Hand_USD' not in cash_data_full.columns:
+                            st.caption(f"Debug Hint: 'Cash_on_Hand_USD' column NOT FOUND in loaded CSV. Available columns: {cash_data_full.columns.tolist()}")
+                        elif not cash_data_full.empty and cash_data_filtered.empty:
+                            st.caption("Debug Hint: CSV loaded, but NO DATA matched the selected date range after filtering.")
+                        elif not cash_data_filtered.empty and 'Cash_on_Hand_USD' not in cash_data_filtered.columns:
+                             st.caption(f"Debug Hint: Filtered data exists, but 'Cash_on_Hand_USD' column NOT FOUND in it. Available columns: {cash_data_filtered.columns.tolist()}")
 
 
                 with chart_col2:
@@ -148,4 +197,4 @@ elif selected_main_option == "Teachers":
 
 
 st.markdown("---")
-st.caption("Intermediate Dashboard Test | v0.1")
+st.caption("Intermediate Dashboard Test | v0.1.debug")
